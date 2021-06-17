@@ -14,18 +14,53 @@ router.get('/list', function (req, res) {
 
 	// Create query params
 	let query = {};
-	if(req.query.id) {
-    	query["_id"] = req.query.id;
-    } else {
-	  	res.status(200).send({docs: []});
+	if(!req.query.id) {
+		res.status(200).send({docs: []});
 	  	return false;
     }
 
-	collection.paginate(query, options, function(err, result) {
-	    if (err) return res.status(500).send({message: "Something went wrong, please try after sometime"});
-	    res.status(200).send(result);
-	});
+	getToDosList(req.query.tag ? req.query.tag : '', req.query.id).then(resp => {
+		res.status(200).send(resp[0]);
+	}, err => {
+		res.status(500).send({message: "Something went wrong, please try after sometime"});
+	})
 });
+
+function getToDosList(tag, id) {
+  return new Promise(function(resolve, reject) {
+    let agg = [
+      {
+        "$unwind": "$toDos"
+      }, {
+        "$match": {
+        	$or: [{"_id": id}, {"toDos.tag": {$regex: `${tag}.*`, $options: "i" }}]
+        }
+      }, {
+        "$group": {
+          _id: null,
+          data: {$push: "$toDos"}
+        }
+      }
+    ]
+
+    collection.aggregate(agg, function(err, response) {
+      if(err) return reject({message: "Something went wrong"})
+      if(!response) return reject({message: "Error while getting remitters data"})
+      return resolve(response)
+    })
+  })
+}
+
+function getToDos(query) {
+  	return new Promise(function(resolve, reject) {
+      	collection.find(query,
+        	function (err, resp) {
+          		if (err) return reject({error: 1, message: "There was a problem while updating data"});
+          		return resolve(resp);
+        	}
+      	);
+    })
+}
 
 // @route CREATE api/v1/to-do/add
 // @desc add to-do
